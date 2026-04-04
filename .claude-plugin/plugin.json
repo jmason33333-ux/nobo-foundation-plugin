@@ -1,0 +1,22 @@
+{
+  "name": "nobo-foundation",
+  "version": "1.0.0",
+  "description": "Nobo Foundation Plugin — 17 specialist skills, compound workflows, and onboarding flows that turn Claude into a context-aware work system for professional services teams. Includes voice learning, project memory, daily continuity, and a skill builder for teams to extend the system themselves.",
+  "author": {
+    "name": "Nobo",
+    "url": "https://nobo.so"
+  },
+  "homepage": "https://nobo.so",
+  "license": "UNLICENSED",
+  "keywords": [
+    "professional-services",
+    "delegation",
+    "brand-voice",
+    "project-management",
+    "onboarding",
+    "voice-learning",
+    "daily-continuity",
+    "compound-workflows",
+    "skill-builder"
+  ]
+}

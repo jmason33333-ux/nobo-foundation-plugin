@@ -1,0 +1,9 @@
+{
+  "plugins": [
+    {
+      "name": "nobo-foundation",
+      "description": "Nobo Foundation Plugin — 17 specialist skills, compound workflows, and onboarding flows that turn Claude into a context-aware work system for professional services teams.",
+      "source": "."
+    }
+  ]
+}
