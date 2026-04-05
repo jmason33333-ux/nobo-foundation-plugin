@@ -245,10 +245,11 @@ Write `how-i-work.md` immediately using the schema in `references/context-file-g
 Display the Global Instructions content with the profile identifier appended.
 
 > "To add this:
-> 1. Click the settings icon in the sidebar
-> 2. Find 'Global Instructions' (it may be under 'Customize' or 'Preferences')
-> 3. Paste the text above into that field
-> 4. Save
+> 1. Click the **Settings** icon (gear icon, bottom of the sidebar)
+> 2. Click **Cowork** in the left menu
+> 3. Find the **Global Instructions** field
+> 4. Paste the text above into that field
+> 5. Click **Save**
 >
 > Once you've done that, let me know and we'll move to the last step."
 
@@ -295,39 +296,51 @@ Combine all three files into a single block:
 [Full contents of how-i-work.md]
 ```
 
-### Step 3: Push to Google Drive via Apps Script webhook
+### Step 3: Save profile to Google Drive
 
 1. Fetch the `System Config` Google Doc from the shared Drive folder via `google_drive_search` and `google_drive_fetch`
-2. Extract `profile_webhook_url` and `profiles_folder_id` from the doc content
-3. POST the profile using `curl` via bash:
+2. Extract `profiles_folder_id` from the doc content
+3. Build the direct link to the Individual Profiles folder: `https://drive.google.com/drive/folders/[profiles_folder_id]`
 
-```bash
-curl -s -X POST "[profile_webhook_url]" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "[name-slug]", "content": "[combined profile markdown - JSON escaped]", "folderId": "[profiles_folder_id]"}'
-```
+**Script:**
 
-4. Check the response for success
+> "Last step — saving your profile to the team's shared Drive folder. This is the one manual step in the whole setup, and it takes about 30 seconds. I've got everything ready for you."
 
-**If webhook succeeds:**
+Display the combined profile block (from Step 2).
+
+Then give these exact instructions:
+
+> "Here's what to do:"
+>
+> **Step 1:** Copy the profile text above (select all of it — from your name down to the last line)
+>
+> **Step 2:** Click this link to open the profiles folder:
+> `https://drive.google.com/drive/folders/[profiles_folder_id]`
+>
+> **Step 3:** In that folder, click the **+ New** button (top left), then **Google Docs**, then **Blank document**
+>
+> **Step 4:** Name the document: `[name-slug] — Claude Profile`
+> (Replace the default "Untitled document" at the top of the page)
+>
+> **Step 5:** Paste the profile text into the document body
+>
+> **Step 6:** You're done — Google Docs saves automatically. Close the tab and come back here.
+>
+> "Let me know when that's saved."
+
+Wait for confirmation.
+
+**After confirmation:**
 > "You're all set. Here's what was created:"
-> - Local profile files (who-i-am.md, how-i-talk.md, how-i-work.md)
-> - Google Drive profile (saved automatically)
-> - Global Instructions (with your profile identifier)
+> - Your profile files saved locally (who-i-am.md, how-i-talk.md, how-i-work.md)
+> - Your profile saved to the team's shared Google Drive folder
+> - Global Instructions configured with your profile identifier
 > - [List connectors enabled or skipped]
 >
 > "When you start a new client project, type `/new-project` to load everything and get set up in about two minutes. That's where this system earns its value."
 
-**If webhook fails** (network error, bad URL, permissions): retry once. If it fails again, fall back to manual instructions:
-
-> "I wasn't able to save your profile to Google Drive automatically. No worries — here's how to do it manually:"
-> 1. Open Google Drive in your browser
-> 2. Navigate to the shared `[Company Name] Claude System` folder, then `Individual Profiles`
-> 3. Click New, then Google Docs, then Blank document
-> 4. Name it: `[name-slug] — Claude Profile`
-> 5. Paste the profile content below
-
-Display the combined profile block.
+**If the user can't access the folder** (permissions error, link doesn't work):
+> "It looks like you might not have access to that folder yet. Ask your team lead to share the `[Company Name] Claude System` folder with your Google account. Once you have access, come back and create the profile doc in the `Individual Profiles` subfolder. Your local files are already saved, so everything else still works."
 
 ## Re-run Behavior
 
@@ -353,9 +366,8 @@ Stop immediately. Never proceed to Q&A without company context — question adap
 ### Local file write failure
 1. Retry once automatically
 2. If it fails again, display the content inline so the user can copy it manually
-3. The critical output is the combined profile for Drive upload — if local files fail but the profile is saved to Drive, onboarding still succeeds
+3. The critical output is the combined profile for the Drive save — if local files fail but the user saves to Drive, onboarding still succeeds
 
-### Google Drive profile push failure
-1. Retry once
-2. Fall back to manual paste instructions (see Phase 6)
-3. Note: `/new-project` will detect the missing profile and fall back to asking for the user's name
+### User can't save to Google Drive
+1. Show the error guidance from Phase 6 (ask team lead for folder access)
+2. Note: `/new-project` will detect the missing profile and fall back to asking for the user's name — onboarding is still usable without the Drive profile
