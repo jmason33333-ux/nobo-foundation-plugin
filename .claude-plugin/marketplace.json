@@ -1,4 +1,8 @@
 {
+  "name": "nobo-foundation-plugin",
+  "owner": {
+    "name": "Nobo"
+  },
   "plugins": [
     {
       "name": "nobo-foundation",
