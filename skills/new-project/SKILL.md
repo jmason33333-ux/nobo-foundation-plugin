@@ -266,15 +266,27 @@ Adapt phrasing to vertical:
 | Generic | "Who are the key people — on their side and yours?" |
 
 **Q4 — Timeline** (always asked)
-Adapt phrasing to vertical:
+Adapt phrasing to vertical. Each version ends with a natural nudge toward connected tools or docs — this is not a separate question, just an open door in case the user wants to point somewhere instead of typing dates.
 
 | Vertical | Phrasing |
 |---|---|
-| Agency | "What's the timeline? Any hard launch dates or client deadlines?" |
-| Law firm | "Any court dates, filing deadlines, or statute of limitations I should know about?" |
-| Consultancy | "What's the timeline? When does the client expect deliverables?" |
-| Real estate | "What's the timeline? Listing date, offer deadline, closing date — whatever's set." |
-| Generic | "Any deadlines or timeline I should know about?" |
+| Agency | "What's the timeline? Any hard launch dates or client deadlines? If you've got a project board or brief with dates in it, send me the link — I can pull what I need." |
+| Law firm | "Any court dates, filing deadlines, or statute of limitations I should know about? If there's a docket sheet or matter tracker, send me the link and I'll grab the dates." |
+| Consultancy | "What's the timeline — when does the client expect deliverables, and are there any hard dates? If there's a project plan or scope doc, send me the link and I'll pull from that." |
+| Real estate | "What's the timeline? Listing date, offer deadline, closing date — whatever's set. If there's a transaction tracker or timeline doc, send me the link." |
+| Generic | "Any deadlines or timeline I should know about? If there's a project board or doc with dates, send me the link — I can pull what I need." |
+
+**Handling the response:**
+
+The user may respond conversationally, drop a link, or name a tool. Handle each path:
+
+1. **Google Drive link or doc name** — Fetch using `google_drive_search` / `google_drive_fetch`. Extract timeline details. Confirm back: "Here's what I pulled — [dates]. That look right?" Record confirmed dates in the brief.
+
+2. **Connected project tool** (ClickUp, Asana, Linear, Monday, Jira, etc.) — If the MCP connector is available, fetch the project or board. Extract milestones, deadlines, and owners. Confirm back: "Pulled these from [tool name] — [dates]. Anything missing?" Record confirmed dates in the brief.
+
+3. **Tool that isn't connected** — Don't error. Respond naturally: "I can't reach [tool name] from this project — no big deal. Can you paste the key dates or milestones? Even rough ones work."
+
+4. **Conversational answer** — The most common path. Record as-is, no special handling needed.
 
 **Q5 — Constraints** *(always asked, use AskUserQuestion tool, multiSelect: true)*
 Present using the AskUserQuestion tool with multiSelect enabled:
@@ -298,12 +310,66 @@ Skip Q6 if answers have been substantive.
 2. Write `CLAUDE.md` using the assembly logic above (now that client name and engagement type are known)
 3. Display the confirmation message
 
+## Phase 4: Project Instructions Setup
+
+After writing all files, generate a project instructions block for the user to paste into the Cowork project settings. This is what tells Claude to read the context files at the start of every session in this project.
+
+### Generate the instructions block
+
+Use the **full CLAUDE.md content** that was assembled and written in Phase 2/3 — not a summary or abbreviated version. The project instructions field IS the CLAUDE.md equivalent in Cowork. It needs the complete content including:
+
+- The identity line ("You are assisting [name], [role] at [company]")
+- The project section (team member, client, engagement type)
+- The context files section with all file references
+- Session start / session continuity instructions
+- Output rules (voice matching, format preferences, file output)
+- Standing rules (project brief reference, no fabrication, clarification policy)
+- Any custom behavioral rules from James's company CLAUDE.md template
+
+**How to generate it:** Read the `CLAUDE.md` file you just wrote to the project folder. Use its full content as the project instructions block. Prepend the profile identifier line at the top:
+
+```
+My Claude profile: [name-slug]
+```
+
+This ensures Phase 0 of future /new-project runs can identify the user, and Claude gets the complete behavioral instructions — not just file pointers.
+
+If degraded mode (no personal profile), the CLAUDE.md already omits the personal profile section and voice-matching rules. No additional stripping needed.
+
+### Walk the user through pasting it
+
+**Script:**
+
+> "One more step that makes a big difference — adding project instructions so Claude loads your context automatically in every session."
+
+Display the generated instructions block.
+
+> "Here's how to add it:"
+>
+> **Step 1:** Click the **Project settings** icon (gear icon next to the project name in the sidebar)
+>
+> **Step 2:** Find the **Project Instructions** field
+>
+> **Step 3:** Paste the text above into that field
+>
+> **Step 4:** Click **Save**
+>
+> "This takes 10 seconds and means you never have to remind Claude who you are or what this project is about."
+
+Wait for confirmation before showing the final summary.
+
+**If the user skips or says they'll do it later:**
+> "No problem — the context files are still in the folder either way. You can add project instructions anytime from the project settings."
+
+Proceed to the confirmation message.
+
 ### Confirmation message
 
 > "You're set. Here's what's loaded for this project:"
 > - [Company name] company context
 > - [User's name] personal profile *(or "Personal profile unavailable — using company context only" if degraded mode)*
 > - Project brief: [client name] — [engagement type]
+> - Project instructions configured *(or "Project instructions skipped — add them anytime from project settings" if skipped)*
 >
 > "You can start delegating. Your team's skills are ready — try describing what you need, or check your delegation guide for sample briefs."
 
