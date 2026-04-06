@@ -84,6 +84,10 @@ Ask one at a time. **Before each question, check:** Did the user already answer 
 
 **Batching related answers:** If the user's answer to one question also covers a later question, acknowledge both and move on. Don't force the sequence.
 
+**Truncated or cut-off messages:** If a user's message appears to end mid-sentence, ask them to finish before moving on. One extra round-trip is better than a gap in the brief. "Looks like that got cut off — what were you saying about [topic]?"
+
+**Shorthand team references:** If the user says something like "typical team" or "same crew as last time" without specifying roles, confirm the assignment before recording. "Just to make sure — are [names] all staffed on this one, and same roles?"
+
 ### Q1 — Client name (skip if already provided)
 
 | Vertical | Phrasing |
@@ -180,13 +184,12 @@ The user may respond conversationally, drop a link, or name a tool. Handle each 
 
 ### Q7 — Constraints + scope boundaries (ask unless already addressed)
 
-Present using the AskUserQuestion tool with multiSelect enabled:
+Present using the AskUserQuestion tool with multiSelect enabled. **Maximum 4 options** (tool limit).
 - Question: "Any constraints or scope boundaries I should know about? Pick all that apply."
 - Options:
   - **Compliance / privacy restrictions** — "Limits on what data or content can be used"
   - **Hard deadline** — "Non-negotiable date that can't move"
   - **Budget cap** — "Not-to-exceed or fixed fee in play"
-  - **Specific tool or format required** — "Must use a particular platform or file type"
   - **Scope boundary** — "Something explicitly out of scope or off-limits"
 
 Multiple selections allowed. If the user selects "Scope boundary," follow up: "What's out of scope?" Record the answer.
