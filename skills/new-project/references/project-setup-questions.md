@@ -34,12 +34,15 @@ Before asking any questions, read the message that triggered /new-project. Users
 
 - **Client name** — "client called [X]", "for [X]", "working with [X]", any proper noun that isn't the company name
 - **Engagement type** — "new client", "new engagement", "existing client", "continuation", "internal", "new matter", "new listing"
-- **Industry or vertical clues** — "manufacturing", "tech", "real estate", etc.
+- **Objective/scope** — "ops strategy", "rebrand", "litigation", "website redesign", "goal is to..."
+- **Deliverables** — "responsible for the deck", "building the playbook", "delivering the audit"
 - **Timeline** — any dates, deadlines, or duration mentioned
-- **Scope or project type** — "ops strategy", "rebrand", "litigation", "website redesign", etc.
 - **Contacts** — any names or roles mentioned
+- **Industry or vertical clues** — "manufacturing", "tech", "real estate", etc.
 
 Store everything extracted. These are confirmed answers — do not re-ask them. Only ask questions that remain unanswered.
+
+**If the user points to a project brief, doc, or project management board** — fetch it using the appropriate connector (Google Drive, ClickUp, Asana, etc.). Extract all relevant answers from the doc before asking any questions. Confirm what you found: "Pulled the key details from [source] — let me confirm what I have and fill in what's missing."
 
 ---
 
@@ -47,14 +50,14 @@ Store everything extracted. These are confirmed answers — do not re-ask them. 
 
 Adapt based on how much the user already told you:
 
-**Most details provided (client + type + scope):**
-> "Got it — [client name], [engagement type]. Pulled [company]'s context and your profile. A couple things I still need:"
+**Most details provided (client + type + objective):**
+> "[Client name], [scope] — got it. Your [company] context and profile are loaded. A few more things I need to build out the brief:"
 
 **Some details provided (client only, or type only):**
-> "[Client name], got it. Pulled [company]'s context and your profile. A few quick questions about this [engagement/matter/project]:"
+> "[Client name], got it. Your [company] context and profile are loaded. I need some detail on this [engagement/matter/project] to build out the brief:"
 
 **Minimal details:**
-> "Pulled [company]'s context and your profile. A few quick questions about this [engagement/matter/project]:"
+> "Your [company] context and profile are loaded. Tell me about this [engagement/matter/project]:"
 
 Use the company's client terminology inferred from Phase 1. Agencies say "engagement" or "project." Law firms say "matter." Real estate says "listing" or "transaction." If unclear, use "project."
 
@@ -77,7 +80,9 @@ Use the company's client terminology inferred from Phase 1. Agencies say "engage
 
 Ask one at a time. **Before each question, check:** Did the user already answer this in their opening message or in a prior answer? If yes, skip it. If partially answered, confirm what you have and ask for what's missing.
 
-**Handling unexpected information mid-flow:** If the user volunteers something relevant to a later question (a tool name, a deadline, a contact), acknowledge it immediately. Don't wait for the "right" question — record it and skip that question when you get there.
+**Handling unexpected information mid-flow:** If the user volunteers something relevant to a later question (a tool name, a deadline, a contact, a deliverable), acknowledge it immediately. Don't wait for the "right" question — record it and skip that question when you get there.
+
+**Batching related answers:** If the user's answer to one question also covers a later question, acknowledge both and move on. Don't force the sequence.
 
 ### Q1 — Client name (skip if already provided)
 
@@ -117,7 +122,29 @@ Otherwise, present using the AskUserQuestion tool. Options adapt by vertical:
 
 The selection shapes the project-brief.md structure. New engagements get onboarding-oriented fields. Continuations reference prior work. Internal projects skip client-facing fields.
 
-### Q3 — Key contacts (ask unless already provided)
+### Q3 — Objective (skip if already provided)
+
+This is the "why" — what success looks like. It's the single most valuable piece of context for every skill that runs after setup.
+
+| Vertical | Phrasing |
+|---|---|
+| Agency | "What's the goal for this engagement? What does a win look like for [client name]?" |
+| Law firm | "What's the objective? What's the best outcome for the client on this matter?" |
+| Consultancy | "What's the goal? What does a successful outcome look like for [client name]?" |
+| Real estate | "What's the goal here? What does a good outcome look like for your client?" |
+| Generic | "What's the main objective? What does success look like on this one?" |
+
+Record both the objective and any measurable success criteria mentioned. If the user is vague ("help them with their ops"), follow up once: "Can you be a bit more specific — is there a deliverable, a decision, or a metric they're targeting?"
+
+### Q4 — Your deliverables (skip if already provided)
+
+This is personal — what does THIS person need to produce? It tells Claude which skills to suggest and what formats to use.
+
+> "What are you personally responsible for delivering? Could be a deck, a report, an analysis, a set of recommendations — whatever lands on your plate."
+
+If the user lists deliverables that overlap with earlier answers, acknowledge and consolidate. Don't re-confirm what you already know.
+
+### Q5 — Key contacts (ask unless already provided)
 
 | Vertical | Phrasing |
 |---|---|
@@ -127,7 +154,7 @@ The selection shapes the project-brief.md structure. New engagements get onboard
 | Real estate | "Who's involved? Buyer, seller, agents on the other side, lender, title company — whoever's in play." |
 | Generic | "Who are the key people — on their side and yours?" |
 
-### Q4 — Timeline (ask unless already provided)
+### Q6 — Timeline + milestones (ask unless already provided)
 
 Each version ends with a natural nudge toward connected tools or docs. This is not a separate question — just an open door.
 
@@ -135,9 +162,9 @@ Each version ends with a natural nudge toward connected tools or docs. This is n
 |---|---|
 | Agency | "What's the timeline? Any hard launch dates or client deadlines? If you've got a project board or brief with dates in it, send me the link — I can pull what I need." |
 | Law firm | "Any court dates, filing deadlines, or statute of limitations I should know about? If there's a docket sheet or matter tracker, send me the link and I'll grab the dates." |
-| Consultancy | "What's the timeline — when does the client expect deliverables, and are there any hard dates? If there's a project plan or scope doc, send me the link and I'll pull from that." |
+| Consultancy | "What's the timeline — any hard dates or key milestones? If there's a project plan or scope doc, send me the link and I'll pull from that." |
 | Real estate | "What's the timeline? Listing date, offer deadline, closing date — whatever's set. If there's a transaction tracker or timeline doc, send me the link." |
-| Generic | "Any deadlines or timeline I should know about? If there's a project board or doc with dates, send me the link — I can pull what I need." |
+| Generic | "Any deadlines or key milestones? If there's a project board or doc with dates, send me the link — I can pull what I need." |
 
 **Handling the response:**
 
@@ -151,21 +178,24 @@ The user may respond conversationally, drop a link, or name a tool. Handle each 
 
 4. **Conversational answer** — The most common path. Record as-is, no special handling needed.
 
-### Q5 — Constraints (ask unless already addressed)
+### Q7 — Constraints + scope boundaries (ask unless already addressed)
 
 Present using the AskUserQuestion tool with multiSelect enabled:
-- Question: "Any constraints I should know about? Pick all that apply."
+- Question: "Any constraints or scope boundaries I should know about? Pick all that apply."
 - Options:
   - **Compliance / privacy restrictions** — "Limits on what data or content can be used"
   - **Hard deadline** — "Non-negotiable date that can't move"
   - **Budget cap** — "Not-to-exceed or fixed fee in play"
   - **Specific tool or format required** — "Must use a particular platform or file type"
+  - **Scope boundary** — "Something explicitly out of scope or off-limits"
 
-Multiple selections allowed. If the user selects nothing, record "No specific constraints noted" in the brief.
+Multiple selections allowed. If the user selects "Scope boundary," follow up: "What's out of scope?" Record the answer.
 
-### Q6 — Catch-all (conditional)
+If the user selects nothing, record "No specific constraints noted" in the brief.
 
-> "Anything else that would be useful context for this [engagement/matter/project]?"
+### Q8 — Catch-all (conditional)
+
+> "Anything else that would help me hit the ground running on this?"
 
 **Ask only if** prior answers were very brief (one-word or one-sentence across the board). Skip if answers have been substantive.
 
@@ -182,27 +212,41 @@ Write this file immediately after the questions are complete.
 **Type:** [Q2 answer]
 **Team member:** [user's full name] ([role])
 
+## Objective
+
+[Q3 answer — the "why" and success criteria. If the user gave a vague answer, record what they said and note "success criteria to be defined."]
+
+## My deliverables
+
+[Q4 answer — what this person is responsible for producing. Formatted as a bulleted list if multiple items.]
+
 ## Key contacts
 
-[Q3 answer — formatted as a bulleted list with roles/responsibilities noted]
+**[Client name]'s side:**
+[Names, roles, and responsibilities — formatted as a bulleted list]
+
+**Our side:**
+[Names, roles, and responsibilities — formatted as a bulleted list]
 
 ## Timeline
 
-[Q4 answer — include any dates, milestones, and source (e.g., "per ClickUp board" or "per conversation")]
+[Q6 answer — include dates, milestones, and source (e.g., "per ClickUp board" or "per conversation"). If no dates, record "Timeline to be determined."]
 
 ## Constraints
 
-[Q5 answer — or omit this section if Q5 was skipped or user selected nothing]
+[Q7 answer — include scope boundaries if mentioned. Omit this section if user selected nothing and had no scope boundaries.]
 
 ## Additional context
 
-[Q6 answer — or omit this section if Q6 was skipped]
+[Q8 answer — omit this section if Q8 was skipped]
 ```
 
 ### Quality bar
 - Client name is present and specific
 - Engagement type is present
+- Objective is present (even if broad — "success criteria to be defined" is acceptable)
+- At least one deliverable is listed
 - At least one key contact is listed with their role
-- Timeline section is present (even if "no deadline mentioned")
-- No placeholder text remains — no `[bracketed variables]` in the final file
+- Timeline section is present (even if "timeline to be determined")
 - Contact roles/responsibilities are captured (decision-maker, day-to-day, technical lead, etc.)
+- No placeholder text remains — no `[bracketed variables]` in the final file

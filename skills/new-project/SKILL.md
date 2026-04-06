@@ -129,9 +129,17 @@ Company name in filename: lowercase with hyphens. "Monumental Agency" → `what-
 **Read `references/project-setup-questions.md` now.** It contains the pre-parse logic, exact question phrasing by vertical, connector-aware timeline handling, and the project brief schema.
 
 Follow that reference file for:
-1. Pre-parsing the user's opening message
+1. Pre-parsing the user's opening message (and any linked docs/boards)
 2. Welcome message (adapted to what's already known)
-3. Questions Q1–Q6 (skip any already answered)
+3. Questions Q1–Q8 (skip any already answered — typically 4–6 questions after pre-parse)
+   - Q1: Client name
+   - Q2: Engagement type
+   - Q3: Objective — what does success look like
+   - Q4: Your deliverables — what are you personally responsible for
+   - Q5: Key contacts
+   - Q6: Timeline + milestones
+   - Q7: Constraints + scope boundaries
+   - Q8: Catch-all (conditional)
 4. Writing `project-brief.md`
 
 **Then write CLAUDE.md** using the assembly logic in `references/claude-md-assembly.md`.
