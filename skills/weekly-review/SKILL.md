@@ -22,6 +22,7 @@ Then identify all active engagement folders. Look for project folders that conta
 
 - `project-brief.md` — client, engagement type, timeline, key contacts, constraints
 - `project-log.md` — what has happened this engagement (deliverables, communications, decisions, risks)
+- `daily-log.md` — recent daily entries (captures decisions, open items, and file changes that may not yet be in the project log)
 
 If you cannot locate project folders or the user has not set up a standard folder structure, ask where active project files live. Do not guess.
 

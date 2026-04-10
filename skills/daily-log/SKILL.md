@@ -33,6 +33,8 @@ Read the following files from the project folder:
 - `project-brief.md` — engagement context (client, timeline, constraints)
 - `CLAUDE.md` — project configuration and any standing instructions
 
+Then list all `.md` and `.txt` files in the project folder. This lets you reference new files in the "Changed" section accurately — catching meeting notes, transcripts, or deliverables that were created during the session.
+
 Then review the current session's conversation to identify:
 1. What tasks were completed (drafts sent, analyses produced, files created)
 2. What decisions were made and why
