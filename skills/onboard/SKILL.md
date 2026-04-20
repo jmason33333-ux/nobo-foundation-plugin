@@ -3,16 +3,17 @@ name: onboard
 description: >
   First-time team member onboarding for Claude System Foundation. Creates
   personal context files (who-i-am, how-i-talk, how-i-work) through guided
-  conversation, connects Google Drive and other tools, and saves profile to
-  the shared Drive folder. Use when someone says "set up my profile", "I'm
-  new", "first time setup", "onboard me", or is using Claude for the first
-  time. Requires Google Drive MCP connector.
-version: 0.1.0
+  conversation, connects Google Drive and other tools, generates personalized
+  Global Instructions, and saves profile to the shared Drive folder. Use when
+  someone says "set up my profile", "I'm new", "first time setup", "onboard
+  me", or is using Claude for the first time. Requires Google Drive MCP
+  connector.
+version: 0.2.0
 ---
 
 # Onboard
 
-Guide a new team member through first-time Claude setup. This skill creates their personal context files through conversation, connects their tools, and saves their profile to the shared Google Drive folder so other skills can find them.
+Guide a new team member through first-time Claude setup. This skill creates their personal context files through conversation, connects their tools, generates personalized Global Instructions, and saves their profile to the shared Google Drive folder so other skills can find them.
 
 ## Critical Rules
 
@@ -29,7 +30,6 @@ Before starting the Q&A, check these in order. Stop at the first failure.
 
 1. **Google Drive connection** — attempt `google_drive_search` with a basic query. If it fails, guide setup (see Phase 0 Step 1). If it succeeds, proceed silently.
 2. **Company context docs** — search Drive for the shared company folder, then fetch `What Is [Company]`, `How We Communicate`, and `How We Work` Google Docs. If any are missing, tell the user: "I can't find your company's shared Claude folder in Google Drive. Make sure the folder has been shared with your Google account. Ask your team lead to send you the sharing link." Stop.
-3. **Global Instructions doc** — search Drive for the `Global Instructions` Google Doc. If missing, continue onboarding but skip Phase 4. Note at the end: "One step was skipped — your Global Instructions document isn't in the shared folder yet. Ask your team lead to add it."
 
 The skill does NOT require individual context files to already exist. That is what this skill creates.
 
@@ -70,6 +70,8 @@ If all docs are fetched, silently extract:
 - Company vertical (agency, law firm, consultancy, real estate, etc.) — infer from the "What Is" doc
 - Team roles mentioned in "How We Work"
 - Communication style signals from "How We Communicate"
+- Tools the company uses from "How We Work"
+- Key behavioral rules or principles from any doc
 
 Store these as working context. Do not show any of this to the user.
 
@@ -233,16 +235,47 @@ Write `how-i-work.md` immediately using the schema in `references/context-file-g
 
 > "Saved your work preferences. Now let's get your settings configured."
 
-## Phase 4: Global Instructions
+## Phase 4: Generate Global Instructions
 
-1. Fetch the `Global Instructions` Google Doc from the shared Drive folder via `google_drive_search` and `google_drive_fetch`
-2. Append the profile identifier line: `My Claude profile: [name-slug]` (using the slug from Phase 1)
-3. Display the complete text in the conversation
+This phase generates a personalized Global Instructions block from everything learned during onboarding — company context + individual profile. This replaces the old approach of reading a pre-written template from Drive.
+
+### Step 1: Synthesize
+
+Using all available information, generate a Global Instructions block. Sources:
+
+- **Company context** (from Phase 0): company name, what it does, key communication principles, work approach, behavioral rules
+- **Individual profile** (from Phases 1-3): name, role, communication style, output preferences, work rhythm, what to avoid
+- **Profile identifier**: the name slug from Phase 1
+
+### Step 2: Generate the block
+
+Follow this structure exactly. Every section should reflect THIS person, not a generic template.
+
+```
+You are working with [Full Name].
+[Name] is [role] at [Company Name] — [one sentence about what the company does, from the "What Is" doc].
+How [Name] communicates:
+- [2-4 bullet points synthesized from How We Communicate company doc + their Phase 2 answers. Include their formality level, directness preference, and any key rules from the company voice. Use specifics from their answers — not generic guidance.]
+How [Name] works:
+- [2-4 bullet points from Phase 3 answers + How We Work company doc. Include collaboration style, work rhythm, and any strong preferences they expressed.]
+Output defaults:
+- [2-4 bullet points from their output format preference, what to avoid selections, and any company-wide output rules from How We Work.]
+My Claude profile: [name-slug]
+```
+
+**Quality rules for generation:**
+- Every bullet point should be specific to this person. If a bullet could apply to anyone, rewrite it.
+- Pull actual phrases or language from their answers where possible.
+- Company-wide rules (from How We Communicate / How We Work) should be included but adapted to this person's context — not just copied verbatim.
+- Keep total length to 100-200 words. Global Instructions are read every session — concise beats comprehensive.
+- The profile identifier line (`My Claude profile: [name-slug]`) must always be the last line.
+
+### Step 3: Present and instruct
 
 **Script:**
-> "Almost done. There's one more thing to set up — a short block of text that tells Claude who you are every time you open a new session. You'll paste it into your settings. Here's what it looks like:"
+> "Almost done. I've put together a short block of text based on everything you told me. This tells Claude who you are every time you open a new session. Here's what it looks like:"
 
-Display the Global Instructions content with the profile identifier appended.
+Display the generated Global Instructions block.
 
 > "To add this:
 > 1. Click the **Settings** icon (gear icon, bottom of the sidebar)
@@ -255,9 +288,13 @@ Display the Global Instructions content with the profile identifier appended.
 
 Wait for confirmation before proceeding.
 
-If the Global Instructions doc was not found in Drive, skip this phase. Output the profile identifier line and tell the user to add it when Global Instructions become available:
+### Step 4: Offer refinement
 
-> "Your profile identifier is: `My Claude profile: [name-slug]` — when your team lead sets up Global Instructions, add this line at the end."
+After the user confirms they've pasted it:
+
+> "If anything in there doesn't sound right — or if you think of something important to add later — you can always edit it in Settings. It's just text."
+
+Move to Phase 5.
 
 ## Phase 5: Additional Connectors
 
@@ -334,7 +371,7 @@ Wait for confirmation.
 > "You're all set. Here's what was created:"
 > - Your profile files saved locally (who-i-am.md, how-i-talk.md, how-i-work.md)
 > - Your profile saved to the team's shared Google Drive folder
-> - Global Instructions configured with your profile identifier
+> - Global Instructions configured in your Cowork settings
 > - [List connectors enabled or skipped]
 >
 > "When you start a new client project, type `/new-project` to load everything and get set up in about two minutes. That's where this system earns its value."
@@ -346,9 +383,10 @@ Wait for confirmation.
 
 If `/onboard` is invoked and context files already exist, check which:
 
-- If all three exist: "It looks like your profile is already set up. Would you like to update any part of it? I can walk you through any section again." Offer options: who-i-am, how-i-talk, how-i-work, or connectors.
+- If all three exist: "It looks like your profile is already set up. Would you like to update any part of it? I can walk you through any section again." Offer options: who-i-am, how-i-talk, how-i-work, Global Instructions, or connectors.
 - If some exist: "I see you already started setup — want to continue from where you left off or start over?" Skip completed phases by default.
-- Global Instructions and connectors: always re-offer even if previously completed (they cannot be verified).
+- Global Instructions and connectors: always re-offer even if previously completed (they cannot be verified from the skill's side).
+- If the user asks to regenerate Global Instructions only: re-read their local context files + company context from Drive, generate fresh Global Instructions using the Phase 4 logic, and present for pasting.
 
 ## Error Handling
 
