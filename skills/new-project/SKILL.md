@@ -7,7 +7,7 @@ description: >
   when someone says "new client", "start a project", "new engagement", "new
   matter", "new listing", or is beginning work on a new client. Requires
   Google Drive MCP connector and completed /onboard.
-version: 0.2.0
+version: 0.2.1
 ---
 
 # New Project
@@ -89,18 +89,38 @@ Use `google_drive_search` then `google_drive_fetch`:
 - Team tools (from `How We Work`)
 - Client terminology ("clients", "matters", "accounts", "listings", "engagements")
 
-### Step 2: Fetch individual profile (1 call)
+### Step 2: Fetch individual profile (1 call, with defensive check)
 
-Search for `[name-slug] — Claude Profile` in Drive. Fetch content.
+Search Drive for `[name-slug] — Claude Profile` using `google_drive_search`.
 
-**If found:** Parse the combined profile:
+**Result handling (defensive — handle all four cases explicitly):**
+
+| Matches returned | Action |
+|---|---|
+| 0 results | Enter degraded mode (see below) |
+| 1 result | Fetch content, parse, proceed |
+| Multiple, with one exact title match | Fetch the exact match. Mention duplicates in the wrap-up at end of Phase 4 ("FYI — I noticed extra profile Docs matching your name. Worth cleaning up.") |
+| Multiple, no exact match | Stop and disambiguate (see below) |
+
+**Disambiguation prompt (when multiple non-exact matches exist):**
+
+> "I found a few profiles in your Drive folder that match `[name-slug]`:
+> 1. `[Title 1]` — last updated [date]
+> 2. `[Title 2]` — last updated [date]
+> 3. `[Title 3]` — last updated [date]
+>
+> Which one is yours? Or cancel so you can clean these up first."
+
+Use AskUserQuestion. Once the user picks, fetch and proceed with that Doc.
+
+**Why stop instead of guess:** Loading the wrong profile silently corrupts every downstream specialist skill — wrong voice, wrong role context, wrong tools. Thirty seconds of friction here saves hours of debugging unexplained output later.
+
+**If found and content fetched, parse the combined profile:**
 1. Strip doc title if first line matches `[name] — Claude Profile`
 2. Split on `---` separators
 3. Section 1 = `who_i_am`, Section 2 = `how_i_talk`, Section 3 = `how_i_work`
 
 Extract: full name, role, format preferences, tools.
-
-**If not found:** Enter degraded mode (see below).
 
 ### Step 3: Fetch company CLAUDE.md template (1 call)
 
@@ -175,8 +195,19 @@ Stop.
 
 ## Error Handling
 
-**Drive not connected:** "Google Drive isn't connected yet. Enable it under Customize → Connectors → Google Drive, then run `/new-project` again." Stop.
+**Drive not connected or connection lost:**
 
-**Company context not found:** Stop. Do not proceed.
+> "I can't reach Google Drive right now — your connection looks expired or disconnected. I need it to load your team's context and your profile.
+>
+> Quick fix:
+> 1. Open the sidebar → Customize → Connectors
+> 2. Find Google Drive. If it shows Reconnect, click it. If it's missing, click Enable.
+> 3. Once it's back, run `/new-project` again. Your work so far is saved.
+>
+> If reconnecting doesn't fix it, ask your team lead — the shared folder may need to be re-shared with your Google account."
 
-**File write failure:** Retry once. Company context + CLAUDE.md are critical (tell user). Individual files are non-critical in degraded mode.
+Stop.
+
+**Company context not found:** Stop. Do not proceed — the project setup depends on the company context layer.
+
+**File write failure:** Retry once. Company context + CLAUDE.md are critical (tell the user if they fail). Individual files are non-critical in degraded mode.

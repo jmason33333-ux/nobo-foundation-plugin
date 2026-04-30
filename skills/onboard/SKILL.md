@@ -8,7 +8,7 @@ description: >
   someone says "set up my profile", "I'm new", "first time setup", "onboard
   me", or is using Claude for the first time. Requires Google Drive MCP
   connector.
-version: 0.2.0
+version: 0.3.0
 ---
 
 # Onboard
@@ -45,15 +45,20 @@ Attempt `google_drive_search` with a basic query. If it succeeds, the connection
 
 If it fails or is unavailable:
 
-> "First, we need to connect Google Drive — that's where your team's shared information lives. Here's how:
-> 1. Open the sidebar
-> 2. Go to Customize, then Connectors
-> 3. Find Google Drive and click Enable
-> 4. Follow the authorization prompts
+> "I can't reach Google Drive right now — your connection looks expired or hasn't been enabled yet. That's where your team's shared information lives, so we need it before going further.
+>
+> Quick fix:
+> 1. Open the sidebar → Customize → Connectors
+> 2. Find Google Drive. If it shows Reconnect, click it. If it's missing, click Enable.
+> 3. Follow the authorization prompts.
 >
 > Let me know when that's done."
 
-Wait for confirmation. Re-test. If it still fails: "I still can't access Google Drive. Make sure you authorized access and try again. If this keeps happening, ask your team lead for help." Stop.
+Wait for confirmation. Re-test. If it still fails:
+
+> "Still no luck. The most common cause is that the shared Drive folder hasn't been shared with your Google account yet. Ask your team lead — they should send you the sharing link."
+
+Stop.
 
 ### Step 2: Fetch company context (silent)
 
@@ -74,6 +79,34 @@ If all docs are fetched, silently extract:
 - Key behavioral rules or principles from any doc
 
 Store these as working context. Do not show any of this to the user.
+
+### Step 3: Existing-profile check (silent)
+
+Before starting Phase 1, check whether this person has run `/onboard` before. The check has two parts.
+
+**Part A: Look for the profile identifier in Global Instructions.**
+
+Search the loaded conversation context (the Global Instructions block, always loaded in every Cowork session) for a line matching:
+
+```
+My Claude profile: [name-slug]
+```
+
+Capture the slug if found.
+
+**Part B: If an identifier was found, verify the profile exists in Drive.**
+
+Use `google_drive_search` for `[name-slug] — Claude Profile` in the shared folder.
+
+**Branch outcomes:**
+
+| Identifier in Global Instructions | Profile Doc in Drive | Branch |
+|---|---|---|
+| Yes | Yes | A — re-run flow (see Re-run Behavior) |
+| Yes | No | B — orphaned-identifier flow (see Re-run Behavior) |
+| No | — | C — first-time user, proceed silently to Phase 1 |
+
+The legacy local-file check (looking for `who-i-am.md` etc. in the current folder) is now a fallback only — used if Drive is unreachable mid-check.
 
 ## Phase 1: Who I Am
 
@@ -333,60 +366,194 @@ Combine all three files into a single block:
 [Full contents of how-i-work.md]
 ```
 
-### Step 3: Save profile to Google Drive
+### Step 3: Read System Config
 
-1. Fetch the `System Config` Google Doc from the shared Drive folder via `google_drive_search` and `google_drive_fetch`
-2. Extract `profiles_folder_id` from the doc content
-3. Build the direct link to the Individual Profiles folder: `https://drive.google.com/drive/folders/[profiles_folder_id]`
+Fetch the `System Config` Google Doc from the shared Drive folder via `google_drive_search` and `google_drive_fetch`. Extract two values from the doc body:
 
-**Script:**
+- `profile_webhook_url` — Apps Script web app URL that creates/updates profile Docs
+- `profiles_folder_id` — Google Drive folder ID for Individual Profiles
 
-> "Last step — saving your profile to the team's shared Drive folder. This is the one manual step in the whole setup, and it takes about 30 seconds. I've got everything ready for you."
+If either value is missing or System Config can't be fetched, skip directly to Step 5 (manual fallback) and tell the user that automated save isn't available right now.
 
-Display the combined profile block (from Step 2).
+### Step 4: Push profile to Drive via webhook (primary path)
 
-Then give these exact instructions:
+Tell the user briefly:
 
-> "Here's what to do:"
+> "Saving your profile to Drive..."
+
+Write the combined profile content to a temp file (avoids JSON escaping headaches with multi-line content), build the JSON payload, and POST to the webhook. The Apps Script automatically creates a new Doc or overwrites an existing Doc with the title `[name-slug] — Claude Profile`.
+
+**Bash invocation pattern** (the model adapts syntax to its sandbox; the goal is a JSON POST followed by a manual redirect-follow to read the response body):
+
+```bash
+# Write the combined profile to a temp file
+cat > /tmp/profile_content.txt <<'PROFILE_EOF'
+[combined profile content from Step 2]
+PROFILE_EOF
+
+# Build the JSON payload safely (Python handles escaping of newlines, quotes, etc.)
+python3 - <<'PY' > /tmp/profile_payload.json
+import json
+with open('/tmp/profile_content.txt') as f:
+    content = f.read()
+payload = {
+  "name": "[name-slug]",
+  "content": content,
+  "folderId": "[profiles_folder_id]"
+}
+print(json.dumps(payload))
+PY
+
+# POST without -L (Apps Script returns 302 with response body at the redirect URL)
+HTTP_CODE=$(curl -sS \
+  -X POST \
+  -H "Content-Type: application/json" \
+  --max-time 30 \
+  -o /tmp/profile_response_body.txt \
+  -D /tmp/profile_response_headers.txt \
+  -w "%{http_code}" \
+  -d @/tmp/profile_payload.json \
+  "[profile_webhook_url]")
+
+# Apps Script success = HTTP 302. The actual response body lives at the redirect URL.
+if [ "$HTTP_CODE" = "302" ]; then
+  LOCATION=$(grep -i "^location:" /tmp/profile_response_headers.txt | cut -d' ' -f2- | tr -d '\r\n')
+  curl -sS --max-time 20 "$LOCATION"
+else
+  echo "WEBHOOK_FAILED: HTTP $HTTP_CODE"
+  cat /tmp/profile_response_body.txt
+fi
+```
+
+**Parse the response.** Expected outcomes:
+
+| Response | Meaning | Action |
+|---|---|---|
+| `{"status":"created", "docId":"...", ...}` | New profile Doc created in Drive | Success — proceed to confirmation |
+| `{"status":"updated", "docId":"...", ...}` | Existing Doc found and overwritten (re-run, or idempotent retry) | Success — proceed to confirmation |
+| `{"status":"error", ...}` | Script-level failure (bad payload, folder permissions, etc.) | Fall through to Step 5 (manual fallback) |
+| `WEBHOOK_FAILED: HTTP [code]` from bash | Network/HTTP error | Fall through to Step 5 |
+| Anything else / no response | Unknown failure | Fall through to Step 5 |
+
+**On success, confirm to the user:**
+
+> "Saved your profile to Drive. You can find it here: `https://docs.google.com/document/d/[docId from response]/edit`
 >
+> Anything in there you want to change later, just edit the Doc directly — Google saves automatically."
+
+Then proceed to the wrap-up message below.
+
+### Step 5: Manual paste (fallback only)
+
+Reach this step only if Step 4 fails or System Config is missing the webhook URL.
+
+> "I couldn't save your profile to Drive automatically. No problem — it takes about 30 seconds manually. Here's what to do:"
+
+Display the combined profile block.
+
 > **Step 1:** Copy the profile text above (select all of it — from your name down to the last line)
 >
 > **Step 2:** Click this link to open the profiles folder:
 > `https://drive.google.com/drive/folders/[profiles_folder_id]`
 >
-> **Step 3:** In that folder, click the **+ New** button (top left), then **Google Docs**, then **Blank document**
+> **Step 3:** Click **+ New** (top left) → **Google Docs** → **Blank document**
 >
-> **Step 4:** Name the document: `[name-slug] — Claude Profile`
-> (Replace the default "Untitled document" at the top of the page)
+> **Step 4:** Name the document exactly: `[name-slug] — Claude Profile`
 >
 > **Step 5:** Paste the profile text into the document body
 >
-> **Step 6:** You're done — Google Docs saves automatically. Close the tab and come back here.
+> **Step 6:** Close the tab — Google Docs auto-saves.
 >
-> "Let me know when that's saved."
+> "Let me know when that's done."
 
 Wait for confirmation.
 
-**After confirmation:**
-> "You're all set. Here's what was created:"
-> - Your profile files saved locally (who-i-am.md, how-i-talk.md, how-i-work.md)
-> - Your profile saved to the team's shared Google Drive folder
-> - Global Instructions configured in your Cowork settings
+**If the user can't access the folder** (permissions error, link doesn't work):
+> "Looks like you might not have access to that folder yet. Ask your team lead to share the `[Company Name] Claude System` folder with your Google account. Once you have access, come back and create the profile doc in the `Individual Profiles` subfolder. Your local files are already saved, so everything else still works."
+
+### Wrap-up (after Step 4 success or Step 5 confirmation)
+
+> "You're all set. Here's what's in place:
+> - Your local profile files (who-i-am.md, how-i-talk.md, how-i-work.md)
+> - Your profile in your team's shared Drive folder
+> - Global Instructions in your Cowork settings
 > - [List connectors enabled or skipped]
 >
-> "When you start a new client project, type `/new-project` to load everything and get set up in about two minutes. That's where this system earns its value."
-
-**If the user can't access the folder** (permissions error, link doesn't work):
-> "It looks like you might not have access to that folder yet. Ask your team lead to share the `[Company Name] Claude System` folder with your Google account. Once you have access, come back and create the profile doc in the `Individual Profiles` subfolder. Your local files are already saved, so everything else still works."
+> When you start a new client project, type `/new-project` to load everything and get set up in about two minutes. That's where this system earns its value."
 
 ## Re-run Behavior
 
-If `/onboard` is invoked and context files already exist, check which:
+The branch is decided by Phase 0 Step 3. Profile state in Drive is the source of truth — local files are a fallback only.
 
-- If all three exist: "It looks like your profile is already set up. Would you like to update any part of it? I can walk you through any section again." Offer options: who-i-am, how-i-talk, how-i-work, Global Instructions, or connectors.
-- If some exist: "I see you already started setup — want to continue from where you left off or start over?" Skip completed phases by default.
-- Global Instructions and connectors: always re-offer even if previously completed (they cannot be verified from the skill's side).
-- If the user asks to regenerate Global Instructions only: re-read their local context files + company context from Drive, generate fresh Global Instructions using the Phase 4 logic, and present for pasting.
+### Branch A: Identifier exists, profile found in Drive
+
+The user has run `/onboard` before and the Drive Doc is intact. Greet them with what's already on file and ask what they want to do.
+
+> "Looks like your profile is already set up:
+> - Name: [Full Name parsed from profile Doc]
+> - Last updated: [last-modified date from Drive search result]
+> - Saved to: [direct link to the Drive Doc]
+>
+> What would you like to do?"
+
+Use AskUserQuestion with these four options:
+- **Update one section** — re-run a specific phase and replace just that section
+- **Regenerate Global Instructions** — re-synthesize from existing profile + company context, no questions
+- **Start fresh** — full re-run; existing Drive Doc gets overwritten
+- **Cancel**
+
+**Update one section flow:**
+1. Sub-question: which section — who-i-am, how-i-talk, or how-i-work?
+2. Re-run only the relevant phase questions
+3. Replace that section in the local file
+4. Generate the updated combined profile (all three sections, latest content)
+5. POST the updated profile to the webhook (use the Phase 6 Step 4 pattern). The Apps Script finds the existing Doc by title and overwrites the body — no duplicate created.
+6. Confirm: "Updated. Your profile in Drive now reflects the change."
+7. If the webhook fails, fall through to a manual update prompt (link to the existing Doc, walk user through select-all-paste).
+
+**Regenerate Global Instructions flow:**
+1. Confirm: "I'll generate a fresh Global Instructions block from your existing profile and your company context. Your profile in Drive stays the same — only the Cowork settings change."
+2. Read local context files if present, otherwise re-fetch the profile from Drive
+3. Run Phase 4 only (synthesize, present, paste)
+4. Confirm completion
+
+**Start fresh flow:**
+1. Confirm explicitly: "This will replace your existing profile in Drive *and* replace your Global Instructions in Cowork settings. Your local context files will be regenerated. Continue?"
+2. On confirm, run all phases as normal (Phase 1 onward)
+3. In Phase 6 Step 4, the webhook POST overwrites the existing Doc by title — no manual cleanup, no duplicates
+
+### Branch B: Identifier exists, profile NOT found in Drive
+
+The user's Cowork settings reference a profile, but the Drive Doc is missing. Could be deleted, renamed, moved, or the original push never landed.
+
+> "Your Cowork settings reference a profile named `[name-slug]`, but I can't find a matching Doc in your team's Drive folder. It may have been deleted, renamed, or never made it through.
+>
+> What would you like to do?"
+
+Use AskUserQuestion:
+- **Recreate from scratch** — full `/onboard` flow; new Doc created in Drive
+- **I have local files — push those to Drive** — if `who-i-am.md`, `how-i-talk.md`, `how-i-work.md` exist locally, generate the combined profile and POST it to the webhook (Apps Script creates a fresh Doc)
+- **Open Drive folder and check first** — display the folder link, pause, then re-search on confirmation
+- **Cancel**
+
+**Push existing local files flow:**
+1. Read the three local files
+2. Generate the combined profile block
+3. POST to the webhook (Phase 6 Step 4 pattern). The Apps Script creates a new Doc since the previous one is missing.
+4. Confirm: "Got it — your profile is back in Drive."
+5. If the webhook fails, fall through to manual paste (Phase 6 Step 5 fallback)
+
+### Branch C: No identifier in Global Instructions
+
+First-time user. Proceed to Phase 1 silently — no re-run logic applies.
+
+### Local-file fallback (legacy)
+
+If Phase 0 Step 3 cannot complete because Drive is unreachable, fall back to checking local files in the current folder:
+
+- If all three exist: offer "update one section" or "start over" — same options as Branch A but warn the user that Drive sync state is unverified
+- If some exist: "Looks like setup was started but didn't finish. Want to continue or start over?"
+- This branch is intentionally degraded — without Drive access the skill can't verify the canonical state, so any "update" requires the user to manually sync to Drive once it's reachable again
 
 ## Error Handling
 
@@ -409,3 +576,15 @@ Stop immediately. Never proceed to Q&A without company context — question adap
 ### User can't save to Google Drive
 1. Show the error guidance from Phase 6 (ask team lead for folder access)
 2. Note: `/new-project` will detect the missing profile and fall back to asking for the user's name — onboarding is still usable without the Drive profile
+
+### Drive connection lost mid-flow
+If `google_drive_search` or `google_drive_fetch` fails partway through onboarding (token expired, network drop, folder permissions changed):
+
+1. **Save what's already been written.** Local files (`who-i-am.md`, `how-i-talk.md`, `how-i-work.md`) stay on disk. Global Instructions, if already pasted, stay in Cowork settings.
+2. **Tell the user clearly:**
+
+> "Drive dropped out partway through. Your local profile files are saved, and any Global Instructions you've already pasted are still in your settings. Reconnect Drive (sidebar → Customize → Connectors → Google Drive), then run `/onboard` again. It'll detect what's already done and offer to finish without re-asking everything."
+
+3. **On the next run,** Phase 0 Step 3 will detect the partial state:
+   - If the identifier is in Global Instructions but no Drive Doc exists → Branch B offers "Push existing local files"
+   - If no identifier yet but local files exist → fall back to the local-file legacy branch and resume from where the user stopped
