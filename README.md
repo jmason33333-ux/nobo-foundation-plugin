@@ -170,6 +170,13 @@ Push changes to this repo and bump the version in `.claude-plugin/plugin.json`. 
 
 ## Changelog
 
+### v0.4.1 — 2026-05-07
+
+- Efficiency pass: every specialist's `Context loading` section trimmed from ~25 lines to ~5 lines (Step 1 / Step 2 / multi-example block removed; priority file lists kept). Same files still get read; less boilerplate in context.
+- Skill descriptions tightened across 12 skills (previously 150–220 words; now 50–80 words). Trigger phrases and skill disambiguation preserved; role narrative moved into SKILL.md bodies.
+- New standing rule in CLAUDE.md template: when reading `project-log.md` or `daily-log.md`, focus on the last 7 days of entries unless the user asks for older history.
+- Per-session token cost on heavy specialist usage reduced ~40–60%. No behavior changes visible to end users beyond faster, cheaper sessions.
+
 ### v0.4.0 — 2026-05-07
 
 - New skill: `/refresh-context` — pulls the latest company and personal context from Drive into the current project, with per-file conflict handling.

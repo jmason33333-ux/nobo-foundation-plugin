@@ -59,6 +59,7 @@ Before starting work in a new session, read `daily-log.md` if it exists. Start w
 - If the task involves client communication, check `how-we-communicate.md` for tone and `how-i-talk.md` for personal style.
 - Do not invent client details, deadlines, or contact information not in `project-brief.md`.
 - Ask for clarification before proceeding if the brief is insufficient for the task.
+- When reading `project-log.md` or `daily-log.md`, focus on entries from the last 7 days unless the user asks for older history. These files grow over time; reading the entire file every time wastes context.
 ```
 
 ## Section always appended (both paths)

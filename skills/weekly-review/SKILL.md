@@ -1,6 +1,6 @@
 ---
 name: weekly-review
-description: "Weekly Review workflow that produces a consolidated end-of-week brief across all active engagements. Reads project-brief.md and project-log.md from each active project folder, produces a multi-engagement status summary, a leadership-ready brief, and draft check-in emails for each active client. Trigger: weekly review, end of week, week in review, weekly roundup, what happened this week, Friday review, weekly status, weekly summary, wrap up the week. Do NOT use for single-project status updates — use project-manager instead. Do NOT use for drafting one-off client emails — use client-comms instead."
+description: "Weekly Review workflow that produces a consolidated end-of-week brief across all active engagements — multi-engagement status summary, leadership-ready brief, and draft check-in emails for each active client. Trigger: weekly review, end of week, week in review, weekly roundup, what happened this week, Friday review, weekly status, weekly summary, wrap up the week. Do NOT use for single-project status updates (use project-manager) or one-off client emails (use client-comms)."
 ---
 
 # Weekly Review

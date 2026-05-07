@@ -1,6 +1,6 @@
 {
   "name": "nobo-foundation",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Nobo Foundation Plugin — 18 skills covering onboarding, project setup, context refresh, specialist roles, compound workflows, and a skill builder. Turns Claude into a context-aware work system for professional services teams. Includes voice learning, project memory, daily continuity, and Drive-synced context propagation.",
   "author": {
     "name": "Nobo",
