@@ -1,6 +1,7 @@
 ---
 name: refine-voice
-description: "Voice Profile Refinement tool that improves how-i-talk.md and how-we-communicate.md from real usage evidence. User pastes before/after examples (Claude draft vs. what they actually sent), content they admire, or content that sounds wrong. Skill extracts patterns and updates the voice files. Trigger: refine voice, update voice, voice profile, fix my voice, it doesn't sound like me, improve how I talk, voice isn't right, tune my voice, update how I talk. Do NOT use for drafting content — use client-comms, content-strategist, or executive-comms instead."
+description: "Voice Profile Refinement tool that improves how-i-talk.md and how-we-communicate.md from real usage evidence. User pastes before/after examples (Claude draft vs. what they actually sent), content they admire, or content that sounds wrong. Skill extracts patterns and updates the voice files, then pushes the personal profile to the canonical Drive copy so other active project folders pick it up on their next /refresh-context run. Trigger: refine voice, update voice, voice profile, fix my voice, it doesn't sound like me, improve how I talk, voice isn't right, tune my voice, update how I talk. Do NOT use for drafting content — use client-comms, content-strategist, or executive-comms. Do NOT use to pull latest context from Drive — use /refresh-context."
+version: 0.2.0
 ---
 
 # Voice Profile Refinement
@@ -127,6 +128,134 @@ If a refined pattern contradicts an existing entry in `how-i-talk.md`, update th
 ### Updates to how-we-communicate.md
 
 Only update this file if the patterns clearly reflect company-wide standards, not just the individual user's style. Ask if you are unsure. Company-level patterns include: standard greeting or sign-off the whole team uses, terms the company always uses or avoids, communication policies (response times, escalation language).
+
+## Push the Updated Profile to Drive
+
+After the local files are written and confirmed, push the updated personal profile to the canonical Drive Doc so the change actually propagates. Without this step, the local file is right but the Drive version stays stale, and any other active project folder that runs `/refresh-context` will pull yesterday's voice — silently overriding what was just refined.
+
+**Block until Drive confirms.** This is synchronous, not fire-and-forget. The user should know when the skill finishes that the propagation is real.
+
+### Scope: personal profile only
+
+This step pushes `how-i-talk.md` (and the rest of the user's individual profile) to Drive. It does **not** push `how-we-communicate.md` to Drive — the canonical Drive version of the company voice has a different file pattern that the current Apps Script webhook doesn't handle. Generalizing the webhook to support arbitrary titles is a v0.5.0 candidate.
+
+If this run updated `how-we-communicate.md` locally, surface the gap explicitly after the personal-profile push completes:
+
+> "Note: `how-we-communicate.md` was updated locally, but the Drive version of the company voice is at [link to How We Communicate Doc] — please paste the updated content there manually, or your team's `/refresh-context` runs won't pick it up."
+
+If only `how-i-talk.md` was updated this run, skip this notice.
+
+### Step 1: Read System Config from Drive
+
+Same lookup pattern `/onboard` Phase 6 Step 3 uses. Search Drive for the `System Config` Doc, fetch its content, and extract:
+
+- `profile_webhook_url` — Apps Script web app URL
+- `profiles_folder_id` — Drive folder ID for Individual Profiles
+
+If either value is missing or System Config can't be fetched, skip directly to the manual fallback (see "If the Webhook Fails" below).
+
+### Step 2: Fetch the current Profile Doc
+
+Read `My Claude profile: [name-slug]` from Global Instructions to get the user's profile slug.
+
+Use `google_drive_search` to find `[name-slug] — Claude Profile` in the Individual Profiles folder. Then `google_drive_fetch` to get its content.
+
+If the Doc is missing, fall through to the manual fallback. Don't create a new Doc here — `/onboard` is the skill that handles missing-profile recovery.
+
+### Step 3: Splice the updated how-i-talk section
+
+Parse the fetched Doc:
+
+1. Strip the doc title if the first line matches `[Full Name] — Claude Profile`.
+2. Split the body on `---` separators. The result should be three sections in order: who-i-am, how-i-talk, how-i-work.
+3. Replace ONLY the how-i-talk section with the freshly updated local `how-i-talk.md` content.
+4. Recombine with `---` separators preserved (one blank line on each side of each separator, matching the original format).
+5. Re-attach the title line at the top so the combined block matches the format documented in `/onboard`'s `references/context-file-guidance.md`.
+
+If the Doc didn't have three sections (malformed, single-section, etc.), don't try to fix it inline. Surface the issue and fall through to manual fallback:
+
+> "The Drive Profile Doc isn't in the expected three-section format. I'll show you the updated `how-i-talk.md` content — please paste it into the Doc manually: [link]."
+
+### Step 4: POST to the webhook
+
+Tell the user briefly:
+
+> "Pushing your refined voice to Drive..."
+
+Use the same two-step pattern documented in `/onboard` Phase 6 Step 4 — POST without `-L`, capture the 302 Location header, GET the redirect URL to read the response body. Apps Script's default redirect handling converts POST → GET on 302 and loses the body, which is why the manual two-step is required.
+
+```bash
+# Write the recombined profile content to a temp file
+cat > /tmp/refine_voice_content.txt <<'PROFILE_EOF'
+[recombined three-section content from Step 3, including title line]
+PROFILE_EOF
+
+# Build the JSON payload safely (Python handles escaping)
+python3 - <<'PY' > /tmp/refine_voice_payload.json
+import json
+with open('/tmp/refine_voice_content.txt') as f:
+    content = f.read()
+payload = {
+  "name": "[name-slug]",
+  "content": content,
+  "folderId": "[profiles_folder_id]"
+}
+print(json.dumps(payload))
+PY
+
+# POST without -L (Apps Script returns 302 with the response body at the redirect URL)
+HTTP_CODE=$(curl -sS \
+  -X POST \
+  -H "Content-Type: application/json" \
+  --max-time 30 \
+  -o /tmp/refine_voice_response_body.txt \
+  -D /tmp/refine_voice_response_headers.txt \
+  -w "%{http_code}" \
+  -d @/tmp/refine_voice_payload.json \
+  "[profile_webhook_url]")
+
+if [ "$HTTP_CODE" = "302" ]; then
+  LOCATION=$(grep -i "^location:" /tmp/refine_voice_response_headers.txt | cut -d' ' -f2- | tr -d '\r\n')
+  curl -sS --max-time 20 "$LOCATION"
+else
+  echo "WEBHOOK_FAILED: HTTP $HTTP_CODE"
+  cat /tmp/refine_voice_response_body.txt
+fi
+```
+
+### Step 5: Parse the response and confirm
+
+| Response | Meaning | Action |
+|---|---|---|
+| `{"status":"updated", "docId":"...", ...}` | Existing Doc overwritten with the spliced content | Success — confirm to user |
+| `{"status":"created", "docId":"...", ...}` | Profile Doc was missing; Apps Script created a fresh one (fallback) | Success — confirm to user |
+| `{"status":"error", ...}` | Script-level failure | Fall through to manual fallback |
+| `WEBHOOK_FAILED: HTTP [code]` | Network/HTTP error | Fall through to manual fallback |
+| Anything else | Unknown failure | Fall through to manual fallback |
+
+**On success, confirm with the direct Doc link:**
+
+> "Pushed to Drive. Your canonical profile is up to date: `https://docs.google.com/document/d/[docId from response]/edit`
+>
+> Other active projects will pick up the change next time they run `/refresh-context`."
+
+### If the Webhook Fails
+
+Same fallback pattern as `/onboard` Phase 6 Step 5. Don't fail silently — display the recombined content and walk the user through pasting it into Drive manually.
+
+> "I couldn't push your profile to Drive automatically. Quick manual fix:"
+
+Display the full recombined three-section profile in a code fence so it copies cleanly.
+
+> **Step 1:** Open your Profile Doc: `https://drive.google.com/drive/folders/[profiles_folder_id]` → find `[name-slug] — Claude Profile`
+>
+> **Step 2:** Open the Doc, select all (⌘A / Ctrl+A), delete the existing content
+>
+> **Step 3:** Paste the text above
+>
+> **Step 4:** Close the tab — Google saves automatically.
+
+If `profiles_folder_id` was unreadable in Step 1, omit the folder link and have the user search Drive for the profile by name.
 
 ## What You Do Not Do
 

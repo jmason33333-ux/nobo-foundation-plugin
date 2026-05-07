@@ -1,6 +1,6 @@
 # Nobo Foundation Plugin
 
-17 specialist skills, compound workflows, and onboarding flows that turn Claude into a context-aware work system for professional services teams. Install once, use everywhere.
+18 skills covering onboarding, project setup, context refresh, specialist roles, and compound workflows that turn Claude into a context-aware work system for professional services teams. Install once, use everywhere.
 
 > **Private distribution repo.** This plugin is delivered as part of the [Nobo Claude System Foundation](https://nobo.so) engagement.
 
@@ -12,13 +12,14 @@
 - [Install](#install)
 - [Getting Started](#getting-started)
 - [Skills Overview](#skills-overview)
-  - [Onboarding (2)](#onboarding)
+  - [Onboarding (3)](#onboarding)
   - [Specialists (10)](#specialist-skills)
   - [Compound Workflows (4)](#compound-workflows)
   - [System Extension (1)](#system-extension)
 - [Context Files](#context-files)
 - [Learning System](#learning-system)
 - [Updating](#updating)
+- [Changelog](#changelog)
 
 ---
 
@@ -61,7 +62,8 @@ The plugin connects to your team's shared Google Drive folder where your company
 | Skill | Description |
 |-------|-------------|
 | `/onboard` | Guided conversation that creates your personal profile — role, voice, work preferences. Connects Google Drive. Run once per team member. |
-| `/new-project` | Creates project context files for a client or engagement. Answer a few questions, and every specialist skill gets the context it needs. |
+| `/new-project` | Creates project context files for a client or engagement. Answer a few questions, and every specialist skill gets the context it needs. Also offers to schedule a weekly `/refresh-context` so the project stays in sync. |
+| `/refresh-context` | Pulls the latest company and personal context from Drive into an already-set-up project. Per-file conflict handling — prompts when local edits differ from Drive instead of silently overwriting. Designed to run manually or as a scheduled weekly task. |
 
 ### Specialist Skills
 
@@ -163,6 +165,17 @@ The plugin gets smarter with use through three mechanisms:
 ## Updating
 
 Push changes to this repo and bump the version in `.claude-plugin/plugin.json`. Clients with auto-update enabled receive updates at next startup.
+
+---
+
+## Changelog
+
+### v0.4.0 — 2026-05-07
+
+- New skill: `/refresh-context` — pulls the latest company and personal context from Drive into the current project, with per-file conflict handling.
+- `/refine-voice` now pushes personal profile updates to Drive synchronously, keeping the canonical Drive version in sync with local edits.
+- `/new-project` now offers to schedule `/refresh-context` as a weekly task during setup.
+- Conflict handling on context refresh: when local files differ from Drive, the user is prompted (overwrite, keep, or skip) instead of silent overwrite. Applies to both `/refresh-context` and `/new-project`'s "refresh context from Drive" re-run option.
 
 ---
 

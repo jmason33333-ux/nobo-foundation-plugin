@@ -7,7 +7,7 @@ description: >
   when someone says "new client", "start a project", "new engagement", "new
   matter", "new listing", or is beginning work on a new client. Requires
   Google Drive MCP connector and completed /onboard.
-version: 0.2.1
+version: 0.3.0
 ---
 
 # New Project
@@ -19,7 +19,7 @@ Set up a Cowork project with full context in under two minutes. Fetch company an
 - **Tone:** Confident warmth. You're direct and move fast, but you're not cold — this person just set up their whole system and now they're starting real work. Be the sharp colleague who makes them feel like the system is already working for them. No narrating. No filler. Every sentence earns its place.
 - **Never use these words:** "prompt", "context window", "token", "MCP"
 - **Complete all file writes.** Do not skip any file. Write all 7 context files plus the project brief plus CLAUDE.md.
-- **Complete all 4 phases.** Do not stop after Phase 3. Phase 4 (project instructions setup) is required.
+- **Complete Phases 0–4.** Do not stop after Phase 3. Phase 4 (project instructions setup) is required. Phase 5 (the scheduled-refresh offer) always runs but the user is free to decline.
 - **Silent phases are silent.** Phases 0–2 happen without visible output.
 - **Speed matters.** Every second before they can start delegating is friction.
 - **Reference files are authoritative.** Read and follow the reference files in `references/` — they contain the exact phrasing, templates, and logic for each phase.
@@ -53,8 +53,9 @@ Set up a Cowork project with full context in under two minutes. Fetch company an
 | 2 | Write 6 context files locally | Nothing | — |
 | 3 | Ask project questions, write brief + CLAUDE.md | Questions + confirmation | `references/project-setup-questions.md` |
 | 4 | Generate project instructions, walk user through paste | Instructions + paste steps | `references/project-instructions-setup.md` |
+| 5 | Offer to schedule weekly `/refresh-context` task | Schedule prompt + setup walkthrough or skip note | — |
 
-**All 4 phases must complete.** Do not stop after Phase 3.
+**Phases 0–4 must complete.** Phase 5 always runs but the user can decline the schedule offer.
 
 ## Phase 0: User Identification (silent)
 
@@ -170,14 +171,96 @@ Follow that reference file for:
 
 **Do not skip this phase.** This is what makes Claude load context automatically in every future session. Without it, the context files exist but Claude doesn't know to read them.
 
+## Phase 5: Schedule Offer for `/refresh-context`
+
+After Phase 4's confirmation message, offer to set up a weekly refresh task. This keeps the project's context files in sync with the canonical Drive copies as voice and process drift over time — without the user having to remember to run `/refresh-context` manually.
+
+Use AskUserQuestion:
+
+- Question: "Want me to set up a weekly refresh task so this project pulls the latest Drive context every Monday morning?"
+- Options:
+  - **Yes, weekly Monday morning** — "Set up `/refresh-context` to run every Monday at 7am"
+  - **Yes, but pick the day/time** — "I'll tell you when to run it"
+  - **No, I'll run it manually** — "Skip the scheduled task; I'll trigger refresh when I need it"
+
+### If "Yes, weekly Monday morning"
+
+Cowork's scheduled-task feature is user-driven, not skill-programmable, so this skill outputs step-by-step instructions for setting it up. Walk the user through:
+
+> "Quick setup — about 30 seconds:
+>
+> **Step 1:** Open this project's settings (gear icon in the sidebar)
+>
+> **Step 2:** Find **Scheduled Tasks** → click **New**
+>
+> **Step 3:** Skill: select `/refresh-context` from the list
+>
+> **Step 4:** Schedule: every **Monday at 7:00 AM**
+>
+> **Step 5:** Save.
+>
+> Done. Every Monday morning, this project will pull the latest company and personal context from Drive. If anything diverges from your local edits, it'll prompt you when you next open the project."
+
+### If "Yes, but pick the day/time"
+
+Ask follow-up questions for day-of-week and time, then walk through the same UI steps with the user's chosen values:
+
+> "Got it. What day of the week works?"
+
+After they answer, ask:
+
+> "And what time?"
+
+Then output the same step-by-step setup, substituting the user's day and time at Step 4.
+
+### If "No, I'll run it manually"
+
+Skip the setup. Add this line to the wrap-up:
+
+> "You can run `/refresh-context` anytime context drifts — voice updates from `/refine-voice`, company doc edits, anything. The 30-day check-in is the natural prompt."
+
+### Wrap-up
+
+After Phase 5 completes (whether the user set up a schedule or declined), Phase 4's confirmation message has already been shown. Don't repeat it. If the schedule was set up, append:
+
+> "Schedule set. Project's good to go."
+
+If skipped, no extra line — the wrap-up from Phase 4 already covered it.
+
 ## Re-run Behavior
 
 If `/new-project` is run in a folder that already has context files:
 
 > "This project already has context loaded. What would you like to do?"
-> 1. Start fresh (replaces all context files)
-> 2. Refresh context from Drive (keeps project brief, updates company and personal context)
-> 3. Cancel
+
+Use AskUserQuestion:
+
+- **Start fresh** — "Replace all context files (company + personal). I'll re-run the project questions too."
+- **Refresh context from Drive** — "Pull the latest company and personal context from Drive. Keep the project brief and CLAUDE.md as-is. Prompt before overwriting any local file that differs from Drive."
+- **Cancel** — "Don't change anything"
+
+### "Start fresh" flow
+
+Run all phases as normal — Phase 1 fetches, Phase 2 writes (silent overwrite of context files is intentional in this branch — the user explicitly asked to start over), Phase 3 re-runs project questions, Phase 4 regenerates project instructions, Phase 5 re-offers the schedule.
+
+### "Refresh context from Drive" flow
+
+Run only Phase 1 (fetch from Drive) and a conflict-aware version of Phase 2. Do not re-run project questions, do not regenerate CLAUDE.md, do not re-prompt for the schedule.
+
+For each of the six context files (3 company, 3 personal):
+
+1. **No local copy?** Write the Drive content. No prompt.
+2. **Local exists and matches Drive byte-for-byte?** Skip silently.
+3. **Local exists and differs from Drive?** Prompt via AskUserQuestion:
+   - Question: "`[file]` differs from Drive. What do you want to do?"
+   - Options:
+     - **Overwrite with Drive** — "Replace the local file with the Drive version"
+     - **Keep local** — "Leave the local file as-is, ignore Drive"
+     - **Skip for now** — "Don't touch this file, ask again next refresh"
+
+This is the same conflict-handling pattern `/refresh-context` uses — by design. The two skills should behave identically when refreshing the same six files. Mention `/refresh-context` at the end as a lighter-weight alternative for future runs:
+
+> "For routine refreshes, `/refresh-context` does this same per-file refresh without going through `/new-project`'s re-run prompt."
 
 ## Degraded Mode
 
